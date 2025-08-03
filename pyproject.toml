@@ -1,0 +1,38 @@
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = """
+    --html=reports/html/report.html 
+    --self-contained-html 
+    --tb=short 
+    --strict-markers 
+    --strict-config 
+    -v
+    --capture=no
+"""
+testpaths = [
+    "step_definitions",
+    "tests"
+]
+python_files = [
+    "test_*.py",
+    "*_test.py"
+]
+python_classes = [
+    "Test*"
+]
+python_functions = [
+    "test_*"
+]
+markers = [
+    "auth: Authentication module tests",
+    "inventory: Inventory module tests", 
+    "cart: Shopping cart module tests",
+    "smoke: Smoke tests",
+    "regression: Regression tests",
+    "TC_AUTH_01: Test case for login with valid credentials",
+    "inventory_view: View product inventory",
+    "add_to_cart: Add products to cart"
+]
+
+[tool.pytest.html]
+render_collapsed = true
