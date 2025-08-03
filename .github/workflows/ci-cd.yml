@@ -22,10 +22,11 @@ on:
         - all
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
   pull-requests: write
+  actions: read
 
 env:
   PYTHON_VERSION: '3.11'
@@ -320,6 +321,9 @@ jobs:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         publish_dir: ./all-reports
         destination_dir: test-reports/${{ github.run_number }}
+        force_orphan: true
+        user_name: 'github-actions[bot]'
+        user_email: 'github-actions[bot]@users.noreply.github.com'
         
     - name: 💬 Comment PR with Test Results
       if: github.event_name == 'pull_request'
