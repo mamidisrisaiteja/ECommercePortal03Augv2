@@ -64,12 +64,47 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+    
+    - name: ⏳ Wait for System Startup
+      run: |
+        echo "Waiting for system initialization to complete..."
+        # Wait for unattended-upgrades and other system processes
+        sudo systemctl is-system-running --wait || true
+        sleep 30
         
     - name: 🎭 Install Playwright with Dependencies
       run: |
         echo "Installing Playwright browsers for ${{ matrix.browser }}"
-        # Update package lists first
-        sudo apt-get update -qq
+        
+        # Wait for any existing apt processes to complete
+        echo "Waiting for package manager to be available..."
+        while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+          echo "Package manager is locked, waiting 10 seconds..."
+          sleep 10
+        done
+        
+        # Wait for unattended-upgrades to complete if running
+        while sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do
+          echo "APT lists locked, waiting 10 seconds..."
+          sleep 10
+        done
+        
+        # Kill any hanging apt processes (if any)
+        sudo pkill -f "apt|dpkg" || true
+        
+        # Clean up any partial installations
+        sudo dpkg --configure -a || true
+        
+        # Update package lists with retry logic
+        echo "Updating package lists..."
+        for i in {1..3}; do
+          if sudo apt-get update -qq; then
+            break
+          else
+            echo "Update failed, retry $i/3 in 15 seconds..."
+            sleep 15
+          fi
+        done
         
         # Install specific packages for Ubuntu 24.04 (Noble) - comprehensive dependencies
         echo "Installing system dependencies for Ubuntu 24.04..."
