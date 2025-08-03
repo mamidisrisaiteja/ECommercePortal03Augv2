@@ -12,14 +12,51 @@ def playwright_instance():
         yield p
 
 
-@pytest.fixture(scope="session")
-def browser(playwright_instance):
-    """Create a browser instance for the test session"""
-    browser = playwright_instance.chromium.launch(
-        headless=False,  # Set to True for headless mode
-        slow_mo=500,     # Slow down operations for better visibility
-        args=["--start-maximized"]
+def pytest_addoption(parser):
+    """Add command line options for pytest"""
+    parser.addoption(
+        "--browser",
+        action="store",
+        default="chromium",
+        help="Browser to run tests on: chromium, firefox, webkit"
     )
+    parser.addoption(
+        "--headless",
+        action="store_true",
+        default=False,
+        help="Run browser in headless mode"
+    )
+
+
+@pytest.fixture(scope="session")
+def browser(playwright_instance, request):
+    """Create a browser instance for the test session"""
+    # Get browser type from command line argument or environment variable
+    browser_name = request.config.getoption("--browser") or os.getenv("BROWSER", "chromium")
+    browser_name = browser_name.lower()
+    
+    # Get headless option from command line or environment
+    headless_option = request.config.getoption("--headless")
+    is_ci = os.getenv("CI", "false").lower() == "true" or os.getenv("GITHUB_ACTIONS", "false").lower() == "true"
+    
+    # Browser launch options
+    launch_options = {
+        "headless": headless_option or is_ci,  # Headless if specified or in CI
+        "args": ["--no-sandbox", "--disable-dev-shm-usage"] if is_ci else ["--start-maximized"],
+    }
+    
+    # Add slow_mo for local debugging
+    if not (headless_option or is_ci):
+        launch_options["slow_mo"] = 500
+    
+    # Launch the appropriate browser
+    if browser_name == "firefox":
+        browser = playwright_instance.firefox.launch(**launch_options)
+    elif browser_name == "webkit":
+        browser = playwright_instance.webkit.launch(**launch_options)
+    else:  # default to chromium
+        browser = playwright_instance.chromium.launch(**launch_options)
+    
     yield browser
     browser.close()
 

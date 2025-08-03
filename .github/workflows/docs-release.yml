@@ -1,0 +1,93 @@
+name: Release and Publish Documentation
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build-docs:
+    name: Build and Publish Documentation
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 🔄 Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: 📦 Install Documentation Dependencies
+      run: |
+        pip install mkdocs mkdocs-material mkdocs-mermaid2-plugin
+        
+    - name: 📚 Create Documentation Structure
+      run: |
+        mkdir -p docs
+        cp README.md docs/index.md
+        cp IMPLEMENTATION_SUMMARY.md docs/
+        cp GITHUB_SETUP.md docs/
+        
+        # Create mkdocs.yml
+        cat > mkdocs.yml << EOF
+        site_name: ECommerce Portal Test Framework
+        site_description: Python Playwright Pytest Cucumber BDD Test Automation Framework
+        site_author: ECommerce Team
+        
+        theme:
+          name: material
+          palette:
+            - scheme: default
+              primary: blue
+              accent: amber
+          features:
+            - navigation.tabs
+            - navigation.sections
+            - navigation.expand
+            - search.highlight
+            
+        nav:
+          - Home: index.md
+          - Implementation: IMPLEMENTATION_SUMMARY.md
+          - GitHub Setup: GITHUB_SETUP.md
+          
+        plugins:
+          - search
+          - mermaid2
+          
+        markdown_extensions:
+          - admonition
+          - codehilite
+          - toc:
+              permalink: true
+        EOF
+        
+    - name: 🏗️ Build Documentation
+      run: mkdocs build
+      
+    - name: 📤 Deploy Documentation to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v4
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./site
+        destination_dir: docs
+        
+    - name: 🏷️ Create Release Assets
+      if: github.event_name == 'release'
+      run: |
+        # Create release package
+        zip -r ecommerce-test-framework-${{ github.event.release.tag_name }}.zip . \
+          -x "*.git*" "*/__pycache__/*" "*/reports/*" "*/.venv/*" "*/node_modules/*"
+          
+    - name: 📎 Upload Release Asset
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./ecommerce-test-framework-${{ github.event.release.tag_name }}.zip
+        asset_name: ecommerce-test-framework-${{ github.event.release.tag_name }}.zip
+        asset_content_type: application/zip

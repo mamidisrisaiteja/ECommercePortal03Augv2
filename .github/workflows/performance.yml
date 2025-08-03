@@ -1,0 +1,86 @@
+name: Performance Testing
+
+on:
+  schedule:
+    # Run performance tests weekly on Sundays at 2 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: 'Test duration in minutes'
+        required: true
+        default: '5'
+        type: string
+
+jobs:
+  performance-test:
+    name: Performance Test Suite
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 🔄 Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: 📦 Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest-benchmark pytest-xdist
+        
+    - name: 🎭 Install Playwright Browsers
+      run: |
+        playwright install chromium
+        playwright install-deps
+        
+    - name: ⚡ Run Performance Tests
+      run: |
+        # Create performance test configuration
+        mkdir -p reports/performance
+        
+        # Run tests with performance monitoring
+        python -m pytest step_definitions/ -m smoke \
+          --benchmark-json=reports/performance/benchmark.json \
+          --html=reports/performance/performance_report.html \
+          --self-contained-html \
+          -v --tb=short
+          
+    - name: 📊 Generate Performance Report
+      run: |
+        cat > reports/performance/performance_summary.md << EOF
+        # 🚀 Performance Test Results
+        
+        **Date:** $(date)
+        **Build:** #${{ github.run_number }}
+        **Commit:** ${{ github.sha }}
+        
+        ## Test Execution Performance
+        
+        The performance test results are available in the benchmark.json file.
+        
+        ## Recommendations
+        
+        - Monitor page load times
+        - Check for memory leaks
+        - Validate response times are within acceptable limits
+        
+        EOF
+        
+    - name: 📤 Upload Performance Reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-reports-${{ github.run_number }}
+        path: reports/performance/
+        retention-days: 90
+        
+    - name: 📈 Update Performance Metrics
+      run: |
+        # Extract key metrics from benchmark results
+        if [ -f "reports/performance/benchmark.json" ]; then
+          echo "Performance test completed successfully"
+          # Add custom logic to extract and store metrics
+        fi

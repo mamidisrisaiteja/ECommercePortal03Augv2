@@ -1,0 +1,204 @@
+name: ECommerce Portal - Test Automation CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run tests daily at 6 AM UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      test_suite:
+        description: 'Test suite to run'
+        required: true
+        default: 'smoke'
+        type: choice
+        options:
+        - smoke
+        - auth
+        - inventory
+        - all
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  test:
+    name: Run Test Suite
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        browser: [chromium, firefox, webkit]
+      fail-fast: false
+    
+    steps:
+    - name: 🔄 Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: 📦 Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: 🎭 Install Playwright Browsers
+      run: |
+        playwright install ${{ matrix.browser }}
+        playwright install-deps
+        
+    - name: 🧪 Run Smoke Tests (Default)
+      if: github.event_name != 'workflow_dispatch'
+      run: |
+        python -m pytest step_definitions/ -m smoke \
+          --html=reports/html/smoke_report_${{ matrix.browser }}.html \
+          --self-contained-html \
+          --browser=${{ matrix.browser }} \
+          -v --tb=short
+          
+    - name: 🧪 Run Selected Test Suite (Manual Trigger)
+      if: github.event_name == 'workflow_dispatch'
+      run: |
+        if [ "${{ github.event.inputs.test_suite }}" = "all" ]; then
+          python -m pytest step_definitions/ \
+            --html=reports/html/full_report_${{ matrix.browser }}.html \
+            --self-contained-html \
+            --browser=${{ matrix.browser }} \
+            -v --tb=short
+        else
+          python -m pytest step_definitions/ -m ${{ github.event.inputs.test_suite }} \
+            --html=reports/html/${{ github.event.inputs.test_suite }}_report_${{ matrix.browser }}.html \
+            --self-contained-html \
+            --browser=${{ matrix.browser }} \
+            -v --tb=short
+        fi
+        
+    - name: 📸 Upload Screenshots on Failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: screenshots-${{ matrix.browser }}-${{ github.run_number }}
+        path: reports/screenshots/
+        retention-days: 30
+        
+    - name: 🎥 Upload Videos on Failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: videos-${{ matrix.browser }}-${{ github.run_number }}
+        path: reports/videos/
+        retention-days: 30
+        
+    - name: 📊 Upload Test Reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-reports-${{ matrix.browser }}-${{ github.run_number }}
+        path: reports/html/
+        retention-days: 30
+
+  publish-reports:
+    name: Publish Test Reports
+    needs: test
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: 🔄 Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: 📥 Download All Test Reports
+      uses: actions/download-artifact@v4
+      with:
+        pattern: test-reports-*
+        path: ./all-reports
+        merge-multiple: true
+        
+    - name: 📋 Generate Test Summary
+      run: |
+        echo "# 🧪 Test Execution Summary" > test-summary.md
+        echo "" >> test-summary.md
+        echo "**Build:** #${{ github.run_number }}" >> test-summary.md
+        echo "**Commit:** ${{ github.sha }}" >> test-summary.md
+        echo "**Branch:** ${{ github.ref_name }}" >> test-summary.md
+        echo "**Triggered by:** ${{ github.event_name }}" >> test-summary.md
+        echo "**Date:** $(date)" >> test-summary.md
+        echo "" >> test-summary.md
+        echo "## 📊 Test Reports by Browser" >> test-summary.md
+        echo "" >> test-summary.md
+        
+        for browser in chromium firefox webkit; do
+          echo "### 🌐 $browser" >> test-summary.md
+          if [ -f "./all-reports/smoke_report_${browser}.html" ]; then
+            echo "- ✅ [Smoke Tests Report](./smoke_report_${browser}.html)" >> test-summary.md
+          fi
+          if [ -f "./all-reports/auth_report_${browser}.html" ]; then
+            echo "- 🔐 [Authentication Tests Report](./auth_report_${browser}.html)" >> test-summary.md
+          fi
+          if [ -f "./all-reports/inventory_report_${browser}.html" ]; then
+            echo "- 📦 [Inventory Tests Report](./inventory_report_${browser}.html)" >> test-summary.md
+          fi
+          if [ -f "./all-reports/full_report_${browser}.html" ]; then
+            echo "- 📋 [Full Test Suite Report](./full_report_${browser}.html)" >> test-summary.md
+          fi
+          echo "" >> test-summary.md
+        done
+        
+        echo "## 📈 Artifacts" >> test-summary.md
+        echo "- Test reports are available as GitHub Action artifacts" >> test-summary.md
+        echo "- Screenshots and videos available for failed tests" >> test-summary.md
+        
+    - name: 📤 Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v4
+      if: github.ref == 'refs/heads/main'
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./all-reports
+        destination_dir: test-reports/${{ github.run_number }}
+        
+    - name: 💬 Comment PR with Test Results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const summary = fs.readFileSync('test-summary.md', 'utf8');
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: summary
+          });
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 🔄 Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: 🔒 Run Security Scan with Bandit
+      run: |
+        pip install bandit[toml]
+        bandit -r . -f json -o bandit-report.json || true
+        
+    - name: 📄 Upload Security Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-report-${{ github.run_number }}
+        path: bandit-report.json
+        retention-days: 30
