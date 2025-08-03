@@ -66,7 +66,6 @@ jobs:
         pip install -r requirements.txt
         
     - name: 🎭 Install Playwright with Dependencies
-      if: steps.playwright-cache.outputs.cache-hit != 'true'
       run: |
         echo "Installing Playwright browsers for ${{ matrix.browser }}"
         # Update package lists first
@@ -91,8 +90,16 @@ jobs:
           libxtst6 \
           xvfb
         
-        # Install specific browser to reduce size and time
+        # Install ALL browsers first to ensure dependencies are met
+        echo "Installing all Playwright browsers to ensure dependencies..."
+        playwright install
+        
+        # Verify the specific browser installation
+        echo "Verifying ${{ matrix.browser }} browser installation..."
         playwright install ${{ matrix.browser }}
+        
+        # List installed browsers for debugging
+        ls -la ~/.cache/ms-playwright/ || echo "Browser cache directory not found"
         
     - name: 🔧 Verify Playwright Installation
       run: |
@@ -113,6 +120,15 @@ jobs:
         PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
       run: |
         echo "Running smoke tests on ${{ matrix.browser }}"
+        # Verify browser installation before running tests
+        if [ ! -d "~/.cache/ms-playwright/${{ matrix.browser }}-"* ]; then
+          echo "Browser not found, ensuring installation..."
+          playwright install ${{ matrix.browser }}
+        fi
+        
+        # Create reports directory
+        mkdir -p reports/html
+        
         python -m pytest step_definitions/ -m smoke \
           --html=reports/html/smoke_report_${{ matrix.browser }}.html \
           --self-contained-html \
@@ -128,6 +144,15 @@ jobs:
         PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
       run: |
         echo "Running ${{ github.event.inputs.test_suite }} tests on ${{ matrix.browser }}"
+        # Verify browser installation before running tests
+        if [ ! -d "~/.cache/ms-playwright/${{ matrix.browser }}-"* ]; then
+          echo "Browser not found, ensuring installation..."
+          playwright install ${{ matrix.browser }}
+        fi
+        
+        # Create reports directory
+        mkdir -p reports/html
+        
         if [ "${{ github.event.inputs.test_suite }}" = "all" ]; then
           python -m pytest step_definitions/ \
             --html=reports/html/full_report_${{ matrix.browser }}.html \
