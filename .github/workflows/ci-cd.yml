@@ -91,31 +91,31 @@ jobs:
           libdbus-glib-1-2 \
           xvfb
         
-        # Install Playwright system dependencies
+        # Install Playwright system dependencies using Python module
         echo "Installing Playwright system dependencies..."
-        sudo playwright install-deps
+        python -m playwright install-deps
         
         # Install ALL browsers first to ensure dependencies are met
         echo "Installing all Playwright browsers to ensure dependencies..."
-        playwright install
+        python -m playwright install
         
         # Verify the specific browser installation
         echo "Verifying ${{ matrix.browser }} browser installation..."
-        playwright install ${{ matrix.browser }}
+        python -m playwright install ${{ matrix.browser }}
         
         # List installed browsers for debugging
         ls -la ~/.cache/ms-playwright/ || echo "Browser cache directory not found"
         
     - name: 🔧 Verify Playwright Installation
       run: |
-        playwright --version
+        python -m playwright --version
         python -c "from playwright.sync_api import sync_playwright; print('Playwright import successful')"
         
     - name: 🖥️ Display System Info
       run: |
         echo "OS Info: $(lsb_release -d | cut -f2)"
         echo "Python Version: $(python --version)"
-        echo "Playwright Version: $(playwright --version)"
+        echo "Playwright Version: $(python -m playwright --version)"
         echo "Available browsers: $(ls ~/.cache/ms-playwright/ 2>/dev/null || echo 'No browsers cached')"
         
     - name: 🧪 Run Smoke Tests (Default)
@@ -128,7 +128,7 @@ jobs:
         # Verify browser installation before running tests
         if [ ! -d "~/.cache/ms-playwright/${{ matrix.browser }}-"* ]; then
           echo "Browser not found, ensuring installation..."
-          playwright install ${{ matrix.browser }}
+          python -m playwright install ${{ matrix.browser }}
         fi
         
         # Create reports directory
@@ -152,7 +152,7 @@ jobs:
         # Verify browser installation before running tests
         if [ ! -d "~/.cache/ms-playwright/${{ matrix.browser }}-"* ]; then
           echo "Browser not found, ensuring installation..."
-          playwright install ${{ matrix.browser }}
+          python -m playwright install ${{ matrix.browser }}
         fi
         
         # Create reports directory
