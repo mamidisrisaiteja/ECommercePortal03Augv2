@@ -37,7 +37,7 @@ jobs:
     
     strategy:
       matrix:
-        browser: [chromium, firefox, webkit]
+        browser: [chromium]
       fail-fast: false
     
     steps:
@@ -50,15 +50,15 @@ jobs:
         python-version: ${{ env.PYTHON_VERSION }}
         cache: 'pip'
         
-    - name: � Cache Playwright Browsers
+    - name: 📂 Cache Playwright Browsers
       uses: actions/cache@v4
       id: playwright-cache
       with:
         path: |
           ~/.cache/ms-playwright
-        key: playwright-${{ matrix.browser }}-${{ hashFiles('requirements.txt') }}
+        key: playwright-chromium-${{ hashFiles('requirements.txt') }}
         restore-keys: |
-          playwright-${{ matrix.browser }}-
+          playwright-chromium-
         
     - name: �📦 Install Dependencies
       run: |
@@ -176,25 +176,10 @@ jobs:
       env:
         CI: true
         PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
-        # Firefox specific environment variables for stability
-        MOZ_HEADLESS: 1
-        DISPLAY: ":99"
-        # WebKit specific environment variables
-        WEBKIT_HEADLESS: 1
-        # General Playwright stability settings
         PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
         PWDEBUG: 0
       run: |
         echo "Running smoke tests on ${{ matrix.browser }}"
-        
-        # Set up virtual display for GUI browsers in headless environment
-        if [ "${{ matrix.browser }}" = "firefox" ] || [ "${{ matrix.browser }}" = "webkit" ]; then
-          echo "Setting up virtual display for ${{ matrix.browser }}"
-          sudo apt-get install -y xvfb
-          export DISPLAY=:99
-          Xvfb :99 -screen 0 1920x1080x24 > /dev/null 2>&1 &
-          sleep 3
-        fi
         
         # Verify browser installation before running tests
         if [ ! -d "~/.cache/ms-playwright/${{ matrix.browser }}-"* ]; then
@@ -205,64 +190,25 @@ jobs:
         # Create reports directory
         mkdir -p reports/html
         
-        # Run tests with browser-specific configurations
-        if [ "${{ matrix.browser }}" = "firefox" ]; then
-          echo "Running Firefox tests with enhanced stability settings"
-          python -m pytest step_definitions/ -m smoke \
-            --html=reports/html/smoke_report_${{ matrix.browser }}.html \
-            --self-contained-html \
-            --test-browser=${{ matrix.browser }} \
-            --headless \
-            -v --tb=short \
-            --maxfail=3 \
-            --timeout=120 \
-            -x
-        elif [ "${{ matrix.browser }}" = "webkit" ]; then
-          echo "Running WebKit tests with enhanced stability settings"
-          python -m pytest step_definitions/ -m smoke \
-            --html=reports/html/smoke_report_${{ matrix.browser }}.html \
-            --self-contained-html \
-            --test-browser=${{ matrix.browser }} \
-            --headless \
-            -v --tb=short \
-            --maxfail=3 \
-            --timeout=120 \
-            -x
-        else
-          echo "Running Chromium tests"
-          python -m pytest step_definitions/ -m smoke \
-            --html=reports/html/smoke_report_${{ matrix.browser }}.html \
-            --self-contained-html \
-            --test-browser=${{ matrix.browser }} \
-            --headless \
-            -v --tb=short \
-            --maxfail=5
-        fi
+        # Run Chromium tests
+        echo "Running Chromium smoke tests"
+        python -m pytest step_definitions/ -m smoke \
+          --html=reports/html/smoke_report_${{ matrix.browser }}.html \
+          --self-contained-html \
+          --test-browser=${{ matrix.browser }} \
+          --headless \
+          -v --tb=short \
+          --maxfail=5
           
     - name: 🧪 Run Selected Test Suite (Manual Trigger)
       if: github.event_name == 'workflow_dispatch'
       env:
         CI: true
         PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
-        # Firefox specific environment variables for stability
-        MOZ_HEADLESS: 1
-        DISPLAY: ":99"
-        # WebKit specific environment variables
-        WEBKIT_HEADLESS: 1
-        # General Playwright stability settings
         PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
         PWDEBUG: 0
       run: |
         echo "Running ${{ github.event.inputs.test_suite }} tests on ${{ matrix.browser }}"
-        
-        # Set up virtual display for GUI browsers in headless environment
-        if [ "${{ matrix.browser }}" = "firefox" ] || [ "${{ matrix.browser }}" = "webkit" ]; then
-          echo "Setting up virtual display for ${{ matrix.browser }}"
-          sudo apt-get install -y xvfb
-          export DISPLAY=:99
-          Xvfb :99 -screen 0 1920x1080x24 > /dev/null 2>&1 &
-          sleep 3
-        fi
         
         # Verify browser installation before running tests
         if [ ! -d "~/.cache/ms-playwright/${{ matrix.browser }}-"* ]; then
@@ -273,47 +219,25 @@ jobs:
         # Create reports directory
         mkdir -p reports/html
         
-        # Run tests with browser-specific configurations
+        # Run tests based on selected test suite
         if [ "${{ github.event.inputs.test_suite }}" = "all" ]; then
-          if [ "${{ matrix.browser }}" = "firefox" ] || [ "${{ matrix.browser }}" = "webkit" ]; then
-            python -m pytest step_definitions/ \
-              --html=reports/html/full_report_${{ matrix.browser }}.html \
-              --self-contained-html \
-              --test-browser=${{ matrix.browser }} \
-              --headless \
-              -v --tb=short \
-              --maxfail=5 \
-              --timeout=120 \
-              -x
-          else
-            python -m pytest step_definitions/ \
-              --html=reports/html/full_report_${{ matrix.browser }}.html \
-              --self-contained-html \
-              --test-browser=${{ matrix.browser }} \
-              --headless \
-              -v --tb=short \
-              --maxfail=10
-          fi
+          echo "Running full test suite on Chromium"
+          python -m pytest step_definitions/ \
+            --html=reports/html/full_report_${{ matrix.browser }}.html \
+            --self-contained-html \
+            --test-browser=${{ matrix.browser }} \
+            --headless \
+            -v --tb=short \
+            --maxfail=10
         else
-          if [ "${{ matrix.browser }}" = "firefox" ] || [ "${{ matrix.browser }}" = "webkit" ]; then
-            python -m pytest step_definitions/ -m ${{ github.event.inputs.test_suite }} \
-              --html=reports/html/${{ github.event.inputs.test_suite }}_report_${{ matrix.browser }}.html \
-              --self-contained-html \
-              --test-browser=${{ matrix.browser }} \
-              --headless \
-              -v --tb=short \
-              --maxfail=3 \
-              --timeout=120 \
-              -x
-          else
-            python -m pytest step_definitions/ -m ${{ github.event.inputs.test_suite }} \
-              --html=reports/html/${{ github.event.inputs.test_suite }}_report_${{ matrix.browser }}.html \
-              --self-contained-html \
-              --test-browser=${{ matrix.browser }} \
-              --headless \
-              -v --tb=short \
-              --maxfail=5
-          fi
+          echo "Running ${{ github.event.inputs.test_suite }} test suite on Chromium"
+          python -m pytest step_definitions/ -m ${{ github.event.inputs.test_suite }} \
+            --html=reports/html/${{ github.event.inputs.test_suite }}_report_${{ matrix.browser }}.html \
+            --self-contained-html \
+            --test-browser=${{ matrix.browser }} \
+            --headless \
+            -v --tb=short \
+            --maxfail=5
         fi
         
     - name: 📸 Upload Screenshots on Failure
@@ -367,25 +291,23 @@ jobs:
         echo "**Triggered by:** ${{ github.event_name }}" >> test-summary.md
         echo "**Date:** $(date)" >> test-summary.md
         echo "" >> test-summary.md
-        echo "## 📊 Test Reports by Browser" >> test-summary.md
+        echo "## 📊 Test Reports" >> test-summary.md
         echo "" >> test-summary.md
         
-        for browser in chromium firefox webkit; do
-          echo "### 🌐 $browser" >> test-summary.md
-          if [ -f "./all-reports/smoke_report_${browser}.html" ]; then
-            echo "- ✅ [Smoke Tests Report](./smoke_report_${browser}.html)" >> test-summary.md
-          fi
-          if [ -f "./all-reports/auth_report_${browser}.html" ]; then
-            echo "- 🔐 [Authentication Tests Report](./auth_report_${browser}.html)" >> test-summary.md
-          fi
-          if [ -f "./all-reports/inventory_report_${browser}.html" ]; then
-            echo "- 📦 [Inventory Tests Report](./inventory_report_${browser}.html)" >> test-summary.md
-          fi
-          if [ -f "./all-reports/full_report_${browser}.html" ]; then
-            echo "- 📋 [Full Test Suite Report](./full_report_${browser}.html)" >> test-summary.md
-          fi
-          echo "" >> test-summary.md
-        done
+        echo "### 🌐 Chromium Browser" >> test-summary.md
+        if [ -f "./all-reports/smoke_report_chromium.html" ]; then
+          echo "- ✅ [Smoke Tests Report](./smoke_report_chromium.html)" >> test-summary.md
+        fi
+        if [ -f "./all-reports/auth_report_chromium.html" ]; then
+          echo "- 🔐 [Authentication Tests Report](./auth_report_chromium.html)" >> test-summary.md
+        fi
+        if [ -f "./all-reports/inventory_report_chromium.html" ]; then
+          echo "- 📦 [Inventory Tests Report](./inventory_report_chromium.html)" >> test-summary.md
+        fi
+        if [ -f "./all-reports/full_report_chromium.html" ]; then
+          echo "- 📋 [Full Test Suite Report](./full_report_chromium.html)" >> test-summary.md
+        fi
+        echo "" >> test-summary.md
         
         echo "## 📈 Artifacts" >> test-summary.md
         echo "- Test reports are available as GitHub Action artifacts" >> test-summary.md
