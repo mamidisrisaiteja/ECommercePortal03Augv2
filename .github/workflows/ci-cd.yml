@@ -176,8 +176,26 @@ jobs:
       env:
         CI: true
         PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
+        # Firefox specific environment variables for stability
+        MOZ_HEADLESS: 1
+        DISPLAY: ":99"
+        # WebKit specific environment variables
+        WEBKIT_HEADLESS: 1
+        # General Playwright stability settings
+        PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+        PWDEBUG: 0
       run: |
         echo "Running smoke tests on ${{ matrix.browser }}"
+        
+        # Set up virtual display for GUI browsers in headless environment
+        if [ "${{ matrix.browser }}" = "firefox" ] || [ "${{ matrix.browser }}" = "webkit" ]; then
+          echo "Setting up virtual display for ${{ matrix.browser }}"
+          sudo apt-get install -y xvfb
+          export DISPLAY=:99
+          Xvfb :99 -screen 0 1920x1080x24 > /dev/null 2>&1 &
+          sleep 3
+        fi
+        
         # Verify browser installation before running tests
         if [ ! -d "~/.cache/ms-playwright/${{ matrix.browser }}-"* ]; then
           echo "Browser not found, ensuring installation..."
@@ -187,21 +205,65 @@ jobs:
         # Create reports directory
         mkdir -p reports/html
         
-        python -m pytest step_definitions/ -m smoke \
-          --html=reports/html/smoke_report_${{ matrix.browser }}.html \
-          --self-contained-html \
-          --test-browser=${{ matrix.browser }} \
-          --headless \
-          -v --tb=short \
-          --maxfail=5
+        # Run tests with browser-specific configurations
+        if [ "${{ matrix.browser }}" = "firefox" ]; then
+          echo "Running Firefox tests with enhanced stability settings"
+          python -m pytest step_definitions/ -m smoke \
+            --html=reports/html/smoke_report_${{ matrix.browser }}.html \
+            --self-contained-html \
+            --test-browser=${{ matrix.browser }} \
+            --headless \
+            -v --tb=short \
+            --maxfail=3 \
+            --timeout=120 \
+            -x
+        elif [ "${{ matrix.browser }}" = "webkit" ]; then
+          echo "Running WebKit tests with enhanced stability settings"
+          python -m pytest step_definitions/ -m smoke \
+            --html=reports/html/smoke_report_${{ matrix.browser }}.html \
+            --self-contained-html \
+            --test-browser=${{ matrix.browser }} \
+            --headless \
+            -v --tb=short \
+            --maxfail=3 \
+            --timeout=120 \
+            -x
+        else
+          echo "Running Chromium tests"
+          python -m pytest step_definitions/ -m smoke \
+            --html=reports/html/smoke_report_${{ matrix.browser }}.html \
+            --self-contained-html \
+            --test-browser=${{ matrix.browser }} \
+            --headless \
+            -v --tb=short \
+            --maxfail=5
+        fi
           
     - name: 🧪 Run Selected Test Suite (Manual Trigger)
       if: github.event_name == 'workflow_dispatch'
       env:
         CI: true
         PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
+        # Firefox specific environment variables for stability
+        MOZ_HEADLESS: 1
+        DISPLAY: ":99"
+        # WebKit specific environment variables
+        WEBKIT_HEADLESS: 1
+        # General Playwright stability settings
+        PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+        PWDEBUG: 0
       run: |
         echo "Running ${{ github.event.inputs.test_suite }} tests on ${{ matrix.browser }}"
+        
+        # Set up virtual display for GUI browsers in headless environment
+        if [ "${{ matrix.browser }}" = "firefox" ] || [ "${{ matrix.browser }}" = "webkit" ]; then
+          echo "Setting up virtual display for ${{ matrix.browser }}"
+          sudo apt-get install -y xvfb
+          export DISPLAY=:99
+          Xvfb :99 -screen 0 1920x1080x24 > /dev/null 2>&1 &
+          sleep 3
+        fi
+        
         # Verify browser installation before running tests
         if [ ! -d "~/.cache/ms-playwright/${{ matrix.browser }}-"* ]; then
           echo "Browser not found, ensuring installation..."
@@ -211,22 +273,47 @@ jobs:
         # Create reports directory
         mkdir -p reports/html
         
+        # Run tests with browser-specific configurations
         if [ "${{ github.event.inputs.test_suite }}" = "all" ]; then
-          python -m pytest step_definitions/ \
-            --html=reports/html/full_report_${{ matrix.browser }}.html \
-            --self-contained-html \
-            --test-browser=${{ matrix.browser }} \
-            --headless \
-            -v --tb=short \
-            --maxfail=10
+          if [ "${{ matrix.browser }}" = "firefox" ] || [ "${{ matrix.browser }}" = "webkit" ]; then
+            python -m pytest step_definitions/ \
+              --html=reports/html/full_report_${{ matrix.browser }}.html \
+              --self-contained-html \
+              --test-browser=${{ matrix.browser }} \
+              --headless \
+              -v --tb=short \
+              --maxfail=5 \
+              --timeout=120 \
+              -x
+          else
+            python -m pytest step_definitions/ \
+              --html=reports/html/full_report_${{ matrix.browser }}.html \
+              --self-contained-html \
+              --test-browser=${{ matrix.browser }} \
+              --headless \
+              -v --tb=short \
+              --maxfail=10
+          fi
         else
-          python -m pytest step_definitions/ -m ${{ github.event.inputs.test_suite }} \
-            --html=reports/html/${{ github.event.inputs.test_suite }}_report_${{ matrix.browser }}.html \
-            --self-contained-html \
-            --test-browser=${{ matrix.browser }} \
-            --headless \
-            -v --tb=short \
-            --maxfail=5
+          if [ "${{ matrix.browser }}" = "firefox" ] || [ "${{ matrix.browser }}" = "webkit" ]; then
+            python -m pytest step_definitions/ -m ${{ github.event.inputs.test_suite }} \
+              --html=reports/html/${{ github.event.inputs.test_suite }}_report_${{ matrix.browser }}.html \
+              --self-contained-html \
+              --test-browser=${{ matrix.browser }} \
+              --headless \
+              -v --tb=short \
+              --maxfail=3 \
+              --timeout=120 \
+              -x
+          else
+            python -m pytest step_definitions/ -m ${{ github.event.inputs.test_suite }} \
+              --html=reports/html/${{ github.event.inputs.test_suite }}_report_${{ matrix.browser }}.html \
+              --self-contained-html \
+              --test-browser=${{ matrix.browser }} \
+              --headless \
+              -v --tb=short \
+              --maxfail=5
+          fi
         fi
         
     - name: 📸 Upload Screenshots on Failure

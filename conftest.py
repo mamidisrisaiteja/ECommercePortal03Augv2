@@ -42,11 +42,52 @@ def browser(playwright_instance, request):
     # Browser launch options
     launch_options = {
         "headless": headless_option or is_ci,  # Headless if specified or in CI
-        "args": ["--no-sandbox", "--disable-dev-shm-usage"] if is_ci else ["--start-maximized"],
     }
     
-    # Add slow_mo for local debugging
-    if not (headless_option or is_ci):
+    # Browser-specific configurations for CI stability
+    if is_ci:
+        if browser_name == "firefox":
+            launch_options.update({
+                "args": [
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-background-timer-throttling",
+                    "--disable-backgrounding-occluded-windows",
+                    "--disable-renderer-backgrounding",
+                    "--disable-web-security",
+                    "--disable-features=TranslateUI",
+                    "--disable-component-extensions-with-background-pages",
+                    "--no-first-run",
+                    "--disable-default-apps"
+                ],
+                "timeout": 60000,  # 60 seconds timeout
+                "handle_sigterm": False,
+                "handle_sigint": False
+            })
+        elif browser_name == "webkit":
+            launch_options.update({
+                "args": [
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-web-security"
+                ],
+                "timeout": 60000,  # 60 seconds timeout
+                "handle_sigterm": False,
+                "handle_sigint": False
+            })
+        else:  # chromium
+            launch_options.update({
+                "args": [
+                    "--no-sandbox", 
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--disable-web-security",
+                    "--disable-features=VizDisplayCompositor"
+                ]
+            })
+    else:
+        # Local development options
+        launch_options["args"] = ["--start-maximized"]
         launch_options["slow_mo"] = 500
     
     # Launch the appropriate browser
@@ -64,25 +105,64 @@ def browser(playwright_instance, request):
 @pytest.fixture(scope="function")
 def browser_context(browser):
     """Create a new browser context for each test"""
-    context = browser.new_context(
-        viewport={'width': 1920, 'height': 1080},
-        record_video_dir="reports/videos/",
-        record_video_size={'width': 1920, 'height': 1080}
-    )
+    # Check if we're in CI environment
+    is_ci = os.getenv("CI", "false").lower() == "true" or os.getenv("GITHUB_ACTIONS", "false").lower() == "true"
     
-    page = context.new_page()
-    
-    # Create context dictionary to share between steps
-    test_context = {
-        'page': page,
-        'context': context,
-        'browser': browser
+    # Context options
+    context_options = {
+        "viewport": {'width': 1920, 'height': 1080},
+        "ignore_https_errors": True,  # Ignore SSL errors
+        "java_script_enabled": True,
+        "accept_downloads": True,
+        "has_touch": False,
+        "is_mobile": False,
+        "locale": "en-US",
+        "timezone_id": "America/New_York"
     }
     
-    yield test_context
+    # Add video recording only if not in CI to avoid storage issues
+    if not is_ci:
+        context_options.update({
+            "record_video_dir": "reports/videos/",
+            "record_video_size": {'width': 1920, 'height': 1080}
+        })
     
-    # Cleanup
-    context.close()
+    try:
+        context = browser.new_context(**context_options)
+        
+        # Set longer timeouts for more stability
+        context.set_default_timeout(30000)  # 30 seconds
+        context.set_default_navigation_timeout(45000)  # 45 seconds
+        
+        page = context.new_page()
+        
+        # Additional page configurations for stability
+        page.set_viewport_size({"width": 1920, "height": 1080})
+        
+        # Create context dictionary to share between steps
+        test_context = {
+            'page': page,
+            'context': context,
+            'browser': browser
+        }
+        
+        yield test_context
+        
+    except Exception as e:
+        print(f"Error creating browser context: {e}")
+        raise
+    finally:
+        # Cleanup with proper error handling
+        try:
+            if 'page' in locals() and page:
+                page.close()
+        except Exception:
+            pass
+        try:
+            if 'context' in locals() and context:
+                context.close()
+        except Exception:
+            pass
 
 
 @pytest.fixture(scope="session", autouse=True)
