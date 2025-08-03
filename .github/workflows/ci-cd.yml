@@ -44,40 +44,77 @@ jobs:
         python-version: ${{ env.PYTHON_VERSION }}
         cache: 'pip'
         
-    - name: 📦 Install Dependencies
+    - name: � Cache Playwright Browsers
+      uses: actions/cache@v4
+      id: playwright-cache
+      with:
+        path: |
+          ~/.cache/ms-playwright
+        key: playwright-${{ matrix.browser }}-${{ hashFiles('requirements.txt') }}
+        restore-keys: |
+          playwright-${{ matrix.browser }}-
+        
+    - name: �📦 Install Dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         
-    - name: 🎭 Install Playwright Browsers
+    - name: 🎭 Install Playwright with Dependencies
+      if: steps.playwright-cache.outputs.cache-hit != 'true'
       run: |
-        playwright install ${{ matrix.browser }}
-        playwright install-deps
+        # Install specific browser to reduce size and time
+        playwright install ${{ matrix.browser }} --with-deps
+        
+    - name: 🔧 Verify Playwright Installation
+      run: |
+        playwright --version
+        python -c "from playwright.sync_api import sync_playwright; print('Playwright import successful')"
+        
+    - name: 🖥️ Display System Info
+      run: |
+        echo "OS Info: $(lsb_release -d | cut -f2)"
+        echo "Python Version: $(python --version)"
+        echo "Playwright Version: $(playwright --version)"
+        echo "Available browsers: $(ls ~/.cache/ms-playwright/ 2>/dev/null || echo 'No browsers cached')"
         
     - name: 🧪 Run Smoke Tests (Default)
       if: github.event_name != 'workflow_dispatch'
+      env:
+        CI: true
+        PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
       run: |
+        echo "Running smoke tests on ${{ matrix.browser }}"
         python -m pytest step_definitions/ -m smoke \
           --html=reports/html/smoke_report_${{ matrix.browser }}.html \
           --self-contained-html \
           --browser=${{ matrix.browser }} \
-          -v --tb=short
+          --headless \
+          -v --tb=short \
+          --maxfail=5
           
     - name: 🧪 Run Selected Test Suite (Manual Trigger)
       if: github.event_name == 'workflow_dispatch'
+      env:
+        CI: true
+        PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
       run: |
+        echo "Running ${{ github.event.inputs.test_suite }} tests on ${{ matrix.browser }}"
         if [ "${{ github.event.inputs.test_suite }}" = "all" ]; then
           python -m pytest step_definitions/ \
             --html=reports/html/full_report_${{ matrix.browser }}.html \
             --self-contained-html \
             --browser=${{ matrix.browser }} \
-            -v --tb=short
+            --headless \
+            -v --tb=short \
+            --maxfail=10
         else
           python -m pytest step_definitions/ -m ${{ github.event.inputs.test_suite }} \
             --html=reports/html/${{ github.event.inputs.test_suite }}_report_${{ matrix.browser }}.html \
             --self-contained-html \
             --browser=${{ matrix.browser }} \
-            -v --tb=short
+            --headless \
+            -v --tb=short \
+            --maxfail=5
         fi
         
     - name: 📸 Upload Screenshots on Failure
