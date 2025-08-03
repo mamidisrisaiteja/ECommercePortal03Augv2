@@ -21,6 +21,12 @@ on:
         - inventory
         - all
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  pull-requests: write
+
 env:
   PYTHON_VERSION: '3.11'
 
@@ -110,7 +116,7 @@ jobs:
         python -m pytest step_definitions/ -m smoke \
           --html=reports/html/smoke_report_${{ matrix.browser }}.html \
           --self-contained-html \
-          --browser=${{ matrix.browser }} \
+          --test-browser=${{ matrix.browser }} \
           --headless \
           -v --tb=short \
           --maxfail=5
@@ -126,7 +132,7 @@ jobs:
           python -m pytest step_definitions/ \
             --html=reports/html/full_report_${{ matrix.browser }}.html \
             --self-contained-html \
-            --browser=${{ matrix.browser }} \
+            --test-browser=${{ matrix.browser }} \
             --headless \
             -v --tb=short \
             --maxfail=10
@@ -134,7 +140,7 @@ jobs:
           python -m pytest step_definitions/ -m ${{ github.event.inputs.test_suite }} \
             --html=reports/html/${{ github.event.inputs.test_suite }}_report_${{ matrix.browser }}.html \
             --self-contained-html \
-            --browser=${{ matrix.browser }} \
+            --test-browser=${{ matrix.browser }} \
             --headless \
             -v --tb=short \
             --maxfail=5

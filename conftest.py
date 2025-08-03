@@ -15,7 +15,7 @@ def playwright_instance():
 def pytest_addoption(parser):
     """Add command line options for pytest"""
     parser.addoption(
-        "--browser",
+        "--test-browser",
         action="store",
         default="chromium",
         help="Browser to run tests on: chromium, firefox, webkit"
@@ -32,7 +32,7 @@ def pytest_addoption(parser):
 def browser(playwright_instance, request):
     """Create a browser instance for the test session"""
     # Get browser type from command line argument or environment variable
-    browser_name = request.config.getoption("--browser") or os.getenv("BROWSER", "chromium")
+    browser_name = request.config.getoption("--test-browser") or os.getenv("BROWSER", "chromium")
     browser_name = browser_name.lower()
     
     # Get headless option from command line or environment
