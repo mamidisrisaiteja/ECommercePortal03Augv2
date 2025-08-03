@@ -88,7 +88,12 @@ jobs:
           libxrandr2 \
           libxss1 \
           libxtst6 \
+          libdbus-glib-1-2 \
           xvfb
+        
+        # Install Playwright system dependencies
+        echo "Installing Playwright system dependencies..."
+        sudo playwright install-deps
         
         # Install ALL browsers first to ensure dependencies are met
         echo "Installing all Playwright browsers to ensure dependencies..."
