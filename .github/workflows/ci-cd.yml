@@ -62,8 +62,31 @@ jobs:
     - name: 🎭 Install Playwright with Dependencies
       if: steps.playwright-cache.outputs.cache-hit != 'true'
       run: |
+        echo "Installing Playwright browsers for ${{ matrix.browser }}"
+        # Update package lists first
+        sudo apt-get update -qq
+        
+        # Install specific packages for Ubuntu 24.04 (Noble) - use runtime packages, not dev packages
+        echo "Installing system dependencies for Ubuntu 24.04..."
+        sudo apt-get install -y \
+          libasound2t64 \
+          libatk-bridge2.0-0 \
+          libatk1.0-0 \
+          libdrm2 \
+          libgtk-3-0 \
+          libnspr4 \
+          libnss3 \
+          libx11-xcb1 \
+          libxcomposite1 \
+          libxdamage1 \
+          libxfixes3 \
+          libxrandr2 \
+          libxss1 \
+          libxtst6 \
+          xvfb
+        
         # Install specific browser to reduce size and time
-        playwright install ${{ matrix.browser }} --with-deps
+        playwright install ${{ matrix.browser }}
         
     - name: 🔧 Verify Playwright Installation
       run: |
